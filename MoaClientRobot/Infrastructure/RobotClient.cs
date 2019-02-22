@@ -27,6 +27,7 @@ namespace ExitGames.Client.Infrastructure
     using ExitGames.Client.Photon.LoadBalancing;
     using System.Linq;
     using System.Collections.Generic;
+    using MoaRobotClient;
 
     /// <summary>
     /// The RobotClient class wraps up usage of a LoadBalancingClient, event handling and simple game logic.
@@ -53,13 +54,18 @@ namespace ExitGames.Client.Infrastructure
 
         #endregion
 
+        private int clientId;
+        private RoomShared roomShared;
+
         #region Constructor
 
         /// <summary>
         /// Initializes a new instance of the <see cref="DemoClient"/> class.
         /// </summary>
-        public RobotClient(bool createGameLoopThread) : base(ConnectionProtocol.Tcp)
+        public RobotClient(bool createGameLoopThread, int clientId, RoomShared roomShared = null) : base(ConnectionProtocol.Tcp)
         {
+            this.roomShared = roomShared;
+            this.clientId = clientId;
             this.MasterServerAddress = "192.168.2.202:4532";
 
             //this.loadBalancingPeer.DebugOut = DebugLevel.INFO;
@@ -71,8 +77,8 @@ namespace ExitGames.Client.Infrastructure
                 this.updateThread.Start();
             }
 
-            this.NickName = "Player_" + (SupportClass.ThreadSafeRandom.Next() % 1000);
-            this.LocalPlayer.SetCustomProperties(new Hashtable() { { "class", "tank" + (SupportClass.ThreadSafeRandom.Next() % 99) } });
+            this.NickName = "Player_" + this.clientId;
+            this.LocalPlayer.SetCustomProperties(new Hashtable() { { "class", "tank" + (SupportClass.ThreadSafeRandom.Next() % 99) }, { "nickName", this.NickName } });
 
 
             // insert your game's AppID (replace <your appid>). hosting yourself: use any name. using Photon Cloud: use your cloud subscription's appID
@@ -214,8 +220,8 @@ namespace ExitGames.Client.Infrastructure
 
         // Used to measure RTT of CountMe event. Supports only 1 event transmitted at a time.
         System.Diagnostics.Stopwatch stopwatch = new System.Diagnostics.Stopwatch();
-        
-		public void SendCountMe()
+
+        public void SendCountMe()
         {
             // to send an event, "raise" it. apply any code (here 3) and set any content (or even null)
             Hashtable eventContent = new Hashtable();
@@ -350,26 +356,51 @@ namespace ExitGames.Client.Infrastructure
 
         private void TakeSeat()
         {
-            Hashtable hashtable = this.CurrentRoom.CustomProperties["gameState"] as Hashtable;
-            var seats = (hashtable["seats"] as object[]);
-            var minimumIndex = seats.Length;
-            for (var i = 1; i < seats.Length; ++i)
+            if (roomShared != null && (roomShared.Seats == null || roomShared.Seats.Count == 0))
             {
-                if (seats[i] == null)
+                roomShared.Seats = new List<int>();
+                Hashtable hashtable = this.CurrentRoom.CustomProperties["gameState"] as Hashtable;
+                var seats = (hashtable["seats"] as object[]);
+                for (var i = 1; i <= this.CurrentRoom.MaxPlayers; ++i)
                 {
-                    minimumIndex = i;
+                    if (seats.Length <= i || seats[i] == null)
+                    {
+                        roomShared.Seats.Add(i);
+                    }
                 }
             }
+            //Hashtable hashtable = this.CurrentRoom.CustomProperties["gameState"] as Hashtable;
+            //var seats = (hashtable["seats"] as object[]);
+            //var minimumIndex = seats.Length;
+            //for (var i = 1; i < seats.Length; ++i)
+            //{
+            //    if (seats[i] == null)
+            //    {
+            //        minimumIndex = i;
+            //        break;
+            //    }
+            //}
 
-            Dictionary<string, int> parameters = new Dictionary<string, int>();
-            parameters.Add("oldSeatNumber", -1);
-            parameters.Add("newSeatNumber", minimumIndex);
+            if (roomShared.Seats != null && roomShared.Seats.Count > 0)
+            {
+                Dictionary<string, int> parameters = new Dictionary<string, int>();
+                parameters.Add("oldSeatNumber", -1);
+                parameters.Add("newSeatNumber", roomShared.Seats[this.clientId] % (this.CurrentRoom.MaxPlayers + 1));
 
-            this.RaiseEvent(CustomPhotonEvents.TakeSeat, parameters);
+                DebugReturn(string.Format(@"TakeSeat: {0} take {1}", this.clientId, roomShared.Seats[this.clientId] % (this.CurrentRoom.MaxPlayers + 1)));
+
+                this.RaiseEvent(CustomPhotonEvents.TakeSeat, parameters);
+            }
         }
 
         private void ChooseRole()
         {
+            if(roomShared != null &&(roomShared.Roles == null || roomShared.Roles.Count == 0))
+            {
+
+            }
+
+
             Hashtable hashtable = this.CurrentRoom.CustomProperties["gameState"] as Hashtable;
             var roles = (hashtable["role"] as object[]);
             var minimumIndex = roles.Length;
@@ -383,7 +414,7 @@ namespace ExitGames.Client.Infrastructure
 
             Dictionary<string, int> parameters = new Dictionary<string, int>();
             parameters.Add("oldRoleId", -1);
-            parameters.Add("newRoleId", minimumIndex);
+            parameters.Add("newRoleId", (minimumIndex + this.clientId - 1) % this.CurrentRoom.MaxPlayers);
 
             this.RaiseEvent(CustomPhotonEvents.ChooseRole, parameters);
         }
@@ -400,7 +431,7 @@ namespace ExitGames.Client.Infrastructure
                 action = Convert.ToString((data as Hashtable)["action"]);
             }
 
-            if(action == "isVoting")
+            if (action == "isVoting")
             {
                 this.RaiseEvent(CustomPhotonEvents.toupiaoend, "");
             }
@@ -409,7 +440,7 @@ namespace ExitGames.Client.Infrastructure
         private void UpdateCurrentActor(object data)
         {
             int actorNr;
-            if(data is Dictionary<string, object>)
+            if (data is Dictionary<string, object>)
             {
                 actorNr = Convert.ToInt32((data as Dictionary<string, object>)["actorNr"]);
             }
@@ -418,7 +449,7 @@ namespace ExitGames.Client.Infrastructure
                 actorNr = Convert.ToInt32((data as Hashtable)["actorNr"]);
             }
 
-            if(this.LocalPlayer.ID == actorNr)
+            if (this.LocalPlayer.ID == actorNr)
             {
                 // todo: isAuthing then shunwei
                 Hashtable hashtable = this.CurrentRoom.CustomProperties["gameState"] as Hashtable;

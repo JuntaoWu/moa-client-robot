@@ -20,7 +20,7 @@ namespace ExitGames.Client.Infrastructure
 
         public RobotClientStarter()
         {
-            this.Client = new RobotClient(true);
+            this.Client = new RobotClient(true, 0);
         }
 
         /// <summary>

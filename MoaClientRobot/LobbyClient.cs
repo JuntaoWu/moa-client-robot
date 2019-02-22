@@ -1,6 +1,7 @@
 ﻿using ExitGames.Client.Infrastructure;
 using ExitGames.Client.Photon;
 using ExitGames.Client.Photon.LoadBalancing;
+using MoaRobotClient;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -97,9 +98,10 @@ namespace MoaClientRobot
 
                         if (isOpen && playerCount < maxPlayers)
                         {
-                            for (var i = playerCount; i < maxPlayers; ++i)
+                            RoomShared roomShared = new RoomShared();
+                            for (int i = playerCount, clientId = 0; i < maxPlayers; ++i, ++clientId)
                             {
-                                RobotClient client = new RobotClient(true);
+                                RobotClient client = new RobotClient(true, clientId, roomShared);
                                 client.OpJoinRoom(roomName);
                             }
                         }
@@ -123,9 +125,10 @@ namespace MoaClientRobot
 
                                 if (isOpen && playerCount < maxPlayers)
                                 {
-                                    for (var i = playerCount; i < maxPlayers; ++i)
+                                    RoomShared roomShared = new RoomShared();
+                                    for (int i = playerCount, clientId = 0; i < maxPlayers; ++i, ++clientId)
                                     {
-                                        RobotClient client = new RobotClient(true);
+                                        RobotClient client = new RobotClient(true, clientId, roomShared);
 
                                         client.OnStateChangeAction += (ClientState obj) =>
                                         {
